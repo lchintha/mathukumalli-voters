@@ -1,7 +1,8 @@
+"use strict";
+
 // The UI. cloud.js signs in, loads the voter list and calls startApp().
 // `onSave(kind, voterId, value)` persists a change ("party" or "abroad"; value null clears it).
 window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
-  "use strict";
 
   // ---------- Data ----------
   const F = fields;
