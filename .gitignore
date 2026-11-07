@@ -1,0 +1,6 @@
+# Personal voter data — never commit
+data.js
+*.csv
+*.json
+*.pdf
+.DS_Store
