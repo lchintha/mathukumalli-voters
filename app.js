@@ -1,18 +1,11 @@
-(() => {
+// The UI. cloud.js signs in, loads the voter list and calls startApp().
+// `onSave(kind, voterId, value)` persists a change ("party" or "abroad"; value null clears it).
+window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
   "use strict";
 
   // ---------- Data ----------
-  // data.js holds personal voter data and is never committed; without it, show a notice.
-  if (!window.VOTER_ROWS) {
-    document.getElementById("app").innerHTML = `
-      <div class="empty" style="margin-top:40px">
-        <strong>Voter data is not available here.</strong><br>
-        <span class="small">For privacy, the voter list is not published with this site.</span>
-      </div>`;
-    return;
-  }
-  const F = window.VOTER_FIELDS;
-  const VOTERS = window.VOTER_ROWS.map(row => {
+  const F = fields;
+  const VOTERS = rows.map(row => {
     const v = {};
     F.forEach((k, i) => (v[k] = row[i]));
     v._vid = String(v.voter_id).toUpperCase();
@@ -45,15 +38,6 @@
     help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/>',
     chevron: '<path d="m9 18 6-6-6-6"/>',
   };
-
-  // ---------- Storage ----------
-  const KEY_A = "mk.assign.v1", KEY_X = "mk.abroad.v1";
-  const load = (k, d) => { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : d; } catch { return d; } };
-  const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-
-  const assign = load(KEY_A, {});
-  const abroad = load(KEY_X, {});
-  const persist = () => { save(KEY_A, assign); save(KEY_X, abroad); };
 
   // ---------- Helpers ----------
   const $ = s => document.querySelector(s);
@@ -288,7 +272,7 @@
   function setParty(vid, pid) {
     if (assign[vid] === pid) delete assign[vid];
     else assign[vid] = pid;
-    persist();
+    onSave("party", vid, assign[vid] || null);
     const v = refresh(vid), p = partyById(assign[vid]);
     toast(p ? `${v.name} → ${p.name}` : `${v.name}: cleared`);
   }
@@ -296,7 +280,7 @@
   function toggleAbroad(vid) {
     if (abroad[vid]) delete abroad[vid];
     else abroad[vid] = 1;
-    persist();
+    onSave("abroad", vid, abroad[vid] || null);
     const v = refresh(vid);
     toast(abroad[vid] ? `${v.name}: out of country` : `${v.name}: in village`);
   }
@@ -357,4 +341,20 @@
   // ---------- Init ----------
   window.addEventListener("hashchange", onRoute);
   onRoute();
-})();
+
+  // Called by cloud.js when tags change on another device.
+  let remoteTimer;
+  return {
+    applyRemote(newAssign, newAbroad) {
+      for (const k of Object.keys(assign)) if (!(k in newAssign)) delete assign[k];
+      Object.assign(assign, newAssign);
+      for (const k of Object.keys(abroad)) if (!(k in newAbroad)) delete abroad[k];
+      Object.assign(abroad, newAbroad);
+      clearTimeout(remoteTimer);
+      remoteTimer = setTimeout(() => {
+        if (parseHash().route === "voters") document.querySelectorAll(".voter, .sheet:not([hidden])").forEach(el => el.dataset.vid && refresh(el.dataset.vid));
+        else renderDashboard();
+      }, 100);
+    },
+  };
+};

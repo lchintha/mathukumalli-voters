@@ -350,3 +350,31 @@ select:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3p
   .sheet .pp.abroad span { display: inline; }
   .sheet .pp.abroad { flex: 1 1 100%; }
 }
+
+/* ---------- Sign-in gate ---------- */
+.tabs { margin-left: auto; }
+.sign-out { color: rgba(255,255,255,.8); }
+.sign-out:hover { background: rgba(255,255,255,.1); color: #fff; }
+.gate { display: grid; place-items: center; min-height: calc(100vh - 60px); padding: 24px 16px; }
+.gate-card {
+  width: 100%; max-width: 380px; text-align: center;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  box-shadow: var(--shadow); padding: 28px 24px; display: grid; gap: 12px; justify-items: center;
+}
+.gate-card h2 { font-size: 20px; }
+.gate-card p { margin: 0; }
+.gate-card .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; }
+.gate-card .btn:disabled { opacity: .6; cursor: default; }
+.btn.google { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; }
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.gate-logo { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; background: var(--brand); color: #fff; }
+.gate-logo svg { width: 26px; height: 26px; }
+@media (prefers-color-scheme: dark) { .gate-logo { background: #0b2b2b; color: var(--brand); } }
+.gate-list { list-style: none; padding: 0; margin: 4px 0; display: grid; gap: 4px; color: var(--muted); }
+.gate-list b { color: var(--text); }
+.spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid var(--surface-2); border-top-color: var(--brand-2);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
