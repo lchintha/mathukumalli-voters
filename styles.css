@@ -378,3 +378,40 @@ select:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3p
   animation: spin .8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Deceased ---------- */
+:root { --deceased: #5f6b6a; }
+@media (prefers-color-scheme: dark) { :root { --deceased: #a3b0ad; } }
+.kpis { grid-template-columns: repeat(5, 1fr); }
+.kpi-icon.deceased { background: color-mix(in srgb, var(--deceased) 14%, transparent); color: var(--deceased); }
+a.kpi:hover { border-color: var(--brand-2); }
+.dead-ic { display: inline-flex; color: var(--deceased); }
+.pp.deceased { --c: var(--deceased); border-style: dashed; }
+.pp.deceased.on { color: #fff; border-style: solid; }
+@media (prefers-color-scheme: dark) { .pp.deceased.on { color: #0e1514; } }
+.pp:disabled { opacity: .35; cursor: not-allowed; }
+.pp:disabled:hover { border-color: var(--border); color: var(--muted); }
+.voter.is-dead { background: var(--surface-2); border-left-color: var(--deceased); }
+.voter.is-dead .v-main, .voter.is-dead .serial, .voter.is-dead .v-loc, .voter.is-dead .v-age { opacity: .6; }
+.is-dead .v-name::after, .sheet.is-dead h3::after {
+  content: "Deceased"; margin-left: 8px; vertical-align: middle;
+  font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px;
+  background: var(--deceased); color: var(--surface);
+}
+@media (max-width: 1100px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .kpis .kpi:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .pp.deceased { flex: 0 0 auto; padding: 4px 10px; }
+  .pp.deceased span { display: none; }
+  .sheet .pp.deceased span { display: inline; }
+  .sheet .pp.deceased { flex: 1 1 100%; }
+  .kpis .kpi:first-child { flex-direction: row; align-items: center; }
+}
+@media (max-width: 640px) {
+  .voter .party-pick { flex-wrap: nowrap; gap: 4px; }
+  .voter .pp { padding: 4px; min-width: 0; }
+  .voter .pp i { display: none; }
+  .voter .pp.abroad, .voter .pp.deceased { padding: 4px 9px; }
+}

@@ -1,8 +1,8 @@
 "use strict";
 
 // The UI. cloud.js signs in, loads the voter list and calls startApp().
-// `onSave(kind, voterId, value)` persists a change ("party" or "abroad"; value null clears it).
-window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
+// `onSave(voterId, changes)` persists changes like { party: "tdp", abroad: null, deceased: 1 } (null clears).
+window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
 
   // ---------- Data ----------
   const F = fields;
@@ -38,6 +38,7 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
     trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
     help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/>',
     chevron: '<path d="m9 18 6-6-6-6"/>',
+    deceased: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/>',
   };
 
   // ---------- Helpers ----------
@@ -57,13 +58,15 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.remove("show"), 1800);
   };
-  const partyOf = v => (partyById(assign[v.voter_id]) ? assign[v.voter_id] : UNASSIGNED);
-  const isAbroad = v => !!abroad[v.voter_id];
+  const isDeceased = v => !!deceased[v.voter_id];
+  // Deceased voters have no party (null) and are left out of party counts.
+  const partyOf = v => (isDeceased(v) ? null : partyById(assign[v.voter_id]) ? assign[v.voter_id] : UNASSIGNED);
+  const isAbroad = v => !isDeceased(v) && !!abroad[v.voter_id];
 
   function countParties(list) {
     const c = { [UNASSIGNED]: 0 };
     PARTIES.forEach(p => (c[p.id] = 0));
-    list.forEach(v => c[partyOf(v)]++);
+    list.forEach(v => { const p = partyOf(v); if (p) c[p]++; });
     return c;
   }
 
@@ -100,7 +103,7 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
     closeSheet();
     if (r === "dashboard") renderDashboard();
     if (r === "voters") {
-      for (const [k, sel] of [["ward", "#f-ward"], ["party", "#f-party"], ["gender", "#f-gender"], ["abroad", "#f-abroad"], ["q", "#q"]])
+      for (const [k, sel] of [["ward", "#f-ward"], ["party", "#f-party"], ["gender", "#f-gender"], ["status", "#f-status"], ["q", "#q"]])
         if (params.has(k)) $(sel).value = params.get(k);
       renderVoters();
     }
@@ -113,8 +116,10 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
     const male = VOTERS.filter(v => v.gender === MALE).length;
     const female = VOTERS.filter(v => v.gender === FEMALE).length;
     const away = VOTERS.filter(isAbroad).length;
+    const dead = VOTERS.filter(isDeceased).length;
+    const living = total - dead;
     const counts = countParties(VOTERS);
-    const tagged = total - counts[UNASSIGNED];
+    const tagged = living - counts[UNASSIGNED];
     const lead = leading(counts);
 
     const kpi = (icon, tone, label, value, sub, link) => `
@@ -131,10 +136,11 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
       kpi("users", "brand", "Total voters", fmt(total), `${WARDS.length} wards`) +
       kpi("male", "male", "Male", fmt(male), `${pct(male, total)}%`) +
       kpi("female", "female", "Female", fmt(female), `${pct(female, total)}%`) +
-      kpi("plane", "abroad", "Out of country", fmt(away), `${pct(away, total)}% of voters`, "#voters?abroad=1");
+      kpi("plane", "abroad", "Out of country", fmt(away), `${pct(away, total)}% of voters`, "#voters?status=abroad") +
+      kpi("deceased", "deceased", "Deceased", fmt(dead), `${pct(dead, total)}% of voters`, "#voters?status=deceased");
 
     $("#party-title").innerHTML = `${svg(ICON.vote)} Expected votes`;
-    $("#tag-progress").textContent = `${fmt(tagged)} / ${fmt(total)} marked`;
+    $("#tag-progress").textContent = `${fmt(tagged)} / ${fmt(living)} marked`;
     $("#party-stack").innerHTML = stackBar(counts);
 
     const tile = (id, name, color, n, extra = "") => `
@@ -143,8 +149,8 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
           id === UNASSIGNED ? svg(ICON.help, 18) : esc(name.slice(0, 1))}</span>
         <span class="party-name">${esc(name)}${lead && lead.id === id ? `<span class="lead-tag">${svg(ICON.trophy, 12)} Leading</span>` : ""}</span>
         <span class="party-count">${fmt(n)}</span>
-        <span class="party-pct">${pct(n, total)}%</span>
-        <span class="party-meter"><i style="width:${pct(n, total)}%"></i></span>
+        <span class="party-pct">${pct(n, living)}%</span>
+        <span class="party-meter"><i style="width:${pct(n, living)}%"></i></span>
       </a>`;
     $("#party-tiles").innerHTML =
       PARTIES.map(p => tile(p.id, p.name, p.color, counts[p.id])).join("") +
@@ -155,6 +161,7 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
       const list = VOTERS.filter(v => v.ward === w);
       const c = countParties(list);
       const out = list.filter(isAbroad).length;
+      const gone = list.filter(isDeceased).length;
       const l = leading(c);
       return `
         <a class="ward" href="#voters?ward=${w}">
@@ -162,7 +169,7 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
             <span class="ward-no">${w}</span>
             <div class="ward-info">
               <span class="ward-name">Ward ${w}</span>
-              <span class="ward-sub">${fmt(list.length)} voters${out ? ` · ${svg(ICON.plane, 12)} ${out}` : ""}</span>
+              <span class="ward-sub">${fmt(list.length)} voters${out ? ` · ${svg(ICON.plane, 12)} ${out}` : ""}${gone ? ` · <span class="dead-ic">${svg(ICON.deceased, 12)}</span> ${gone}` : ""}</span>
             </div>
             ${l ? `<span class="ward-lead" style="background:${l.color};color:${onColor(l.color)}">${l.name}</span>` : ""}
             <span class="ward-go">${svg(ICON.chevron, 18)}</span>
@@ -182,8 +189,14 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
     + `<option value="${UNASSIGNED}">Not marked</option>`;
 
   function resetFilters() {
-    ["#q", "#f-ward", "#f-gender", "#f-party", "#f-abroad"].forEach(s => ($(s).value = ""));
+    ["#q", "#f-ward", "#f-gender", "#f-party", "#f-status"].forEach(s => ($(s).value = ""));
   }
+
+  const STATUS = {
+    village: { label: "In village", test: v => !isDeceased(v) && !isAbroad(v) },
+    abroad: { label: "Out of country", test: isAbroad },
+    deceased: { label: "Deceased", test: isDeceased },
+  };
 
   // Numbers search గ్రా.పం.ఓ.జా.వ.సం.; anything else searches Voter ID.
   function matcher() {
@@ -194,13 +207,13 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
   }
 
   function renderVoters() {
-    const ward = $("#f-ward").value, gender = $("#f-gender").value, party = $("#f-party").value, out = $("#f-abroad").value;
+    const ward = $("#f-ward").value, gender = $("#f-gender").value, party = $("#f-party").value, status = $("#f-status").value;
     const m = matcher();
     filtered = VOTERS.filter(v =>
       (!ward || v.ward === +ward) &&
       (!gender || v.gender === gender) &&
       (!party || partyOf(v) === party) &&
-      (!out || isAbroad(v) === (out === "1")) &&
+      (!status || STATUS[status].test(v)) &&
       (!m || m(v)));
     shown = 0;
     $("#voter-list").innerHTML = "";
@@ -210,7 +223,7 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
     if (ward) chips.push(["#f-ward", `Ward ${ward}`]);
     if (gender) chips.push(["#f-gender", gender === MALE ? "Male" : "Female"]);
     if (party) chips.push(["#f-party", party === UNASSIGNED ? "Not marked" : partyById(party)?.name]);
-    if (out) chips.push(["#f-abroad", out === "1" ? "Out of country" : "In village"]);
+    if (status) chips.push(["#f-status", STATUS[status].label]);
     if ($("#q").value.trim()) chips.push(["#q", `“${$("#q").value.trim()}”`]);
     $("#active-filters").innerHTML = chips.map(([k, l]) => `<button class="pill-x" data-k="${k}" type="button">${esc(l)} ✕</button>`).join("")
       + (chips.length > 1 ? `<button class="pill-x clear" data-k="all" type="button">Clear all</button>` : "");
@@ -224,19 +237,22 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
   }
 
   function pickerHTML(v) {
-    const cur = partyOf(v), away = isAbroad(v);
+    const cur = partyOf(v), away = isAbroad(v), dead = isDeceased(v);
+    const off = dead ? " disabled" : "";
     return PARTIES.map(p => `
-      <button type="button" class="pp${cur === p.id ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-p="${p.id}"
+      <button type="button" class="pp${cur === p.id ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-p="${p.id}"${off}
         style="--c:${p.color};--on:${onColor(p.color)}" aria-pressed="${cur === p.id}"><i></i>${p.name}</button>`).join("")
-      + `<button type="button" class="pp abroad${away ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-abroad
-        aria-pressed="${away}" title="Out of country">${svg(ICON.plane, 14)}<span>Abroad</span></button>`;
+      + `<button type="button" class="pp abroad${away ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-abroad${off}
+        aria-pressed="${away}" title="Out of country">${svg(ICON.plane, 14)}<span>Abroad</span></button>`
+      + `<button type="button" class="pp deceased${dead ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-dead
+        aria-pressed="${dead}" title="Deceased">${svg(ICON.deceased, 14)}<span>Deceased</span></button>`;
   }
 
   function voterHTML(v) {
     const p = partyById(partyOf(v));
     const male = v.gender === MALE;
     return `
-      <div class="voter${isAbroad(v) ? " is-abroad" : ""}" data-vid="${esc(v.voter_id)}" style="--party-color:${p ? p.color : "var(--border)"}">
+      <div class="voter${isAbroad(v) ? " is-abroad" : ""}${isDeceased(v) ? " is-dead" : ""}" data-vid="${esc(v.voter_id)}" style="--party-color:${p ? p.color : "var(--border)"}">
         <div class="serial" title="గ్రా.పం.ఓ.జా.వ.సం.">${v.serial}</div>
         <div class="v-main">
           <div class="v-name" data-open="${esc(v.voter_id)}">${esc(v.name)}</div>
@@ -265,30 +281,54 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
       const p = partyById(partyOf(v));
       el.style.setProperty("--party-color", p ? p.color : "var(--border)");
       el.classList.toggle("is-abroad", isAbroad(v));
+      el.classList.toggle("is-dead", isDeceased(v));
       el.querySelector(".party-pick").innerHTML = pickerHTML(v);
     });
     return v;
   }
 
   function setParty(vid, pid) {
+    if (deceased[vid]) return;
     if (assign[vid] === pid) delete assign[vid];
     else assign[vid] = pid;
-    onSave("party", vid, assign[vid] || null);
+    onSave(vid, { party: assign[vid] || null });
     const v = refresh(vid), p = partyById(assign[vid]);
     toast(p ? `${v.name} → ${p.name}` : `${v.name}: cleared`);
   }
 
   function toggleAbroad(vid) {
+    if (deceased[vid]) return;
     if (abroad[vid]) delete abroad[vid];
     else abroad[vid] = 1;
-    onSave("abroad", vid, abroad[vid] || null);
+    onSave(vid, { abroad: abroad[vid] || null });
     const v = refresh(vid);
     toast(abroad[vid] ? `${v.name}: out of country` : `${v.name}: in village`);
   }
 
+  // Marking deceased clears the voter's party and abroad marks.
+  function toggleDeceased(vid) {
+    const v = BY_VID.get(vid);
+    if (deceased[vid]) {
+      delete deceased[vid];
+      onSave(vid, { deceased: null });
+    } else {
+      const p = partyById(assign[vid]);
+      if (p && !confirm(`Mark ${v.name} as deceased? Their ${p.name} mark will be removed.`)) return;
+      deceased[vid] = 1;
+      delete assign[vid];
+      delete abroad[vid];
+      onSave(vid, { deceased: 1, party: null, abroad: null });
+    }
+    refresh(vid);
+    toast(deceased[vid] ? `${v.name}: marked deceased` : `${v.name}: deceased mark removed`);
+  }
+
   document.addEventListener("click", e => {
     const pp = e.target.closest(".pp");
-    if (pp) return "abroad" in pp.dataset ? toggleAbroad(pp.dataset.vid) : setParty(pp.dataset.vid, pp.dataset.p);
+    if (pp) {
+      if ("dead" in pp.dataset) return toggleDeceased(pp.dataset.vid);
+      return "abroad" in pp.dataset ? toggleAbroad(pp.dataset.vid) : setParty(pp.dataset.vid, pp.dataset.p);
+    }
     const open = e.target.closest("[data-open]");
     if (open) return openSheet(open.dataset.open);
     const ward = e.target.closest("a.ward, a.party-tile, a.kpi");
@@ -297,7 +337,7 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
 
   let qTimer;
   $("#q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(renderVoters, 150); });
-  ["#f-ward", "#f-gender", "#f-party", "#f-abroad"].forEach(s => $(s).addEventListener("change", renderVoters));
+  ["#f-ward", "#f-gender", "#f-party", "#f-status"].forEach(s => $(s).addEventListener("change", renderVoters));
   $("#load-more").addEventListener("click", more);
   $("#active-filters").addEventListener("click", e => {
     const b = e.target.closest(".pill-x");
@@ -314,7 +354,7 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
     if (!v) return;
     const s = $("#sheet");
     s.dataset.vid = vid;
-    s.className = "sheet" + (isAbroad(v) ? " is-abroad" : "");
+    s.className = "sheet" + (isAbroad(v) ? " is-abroad" : "") + (isDeceased(v) ? " is-dead" : "");
     s.innerHTML = `
       <button class="icon-btn close" type="button" data-close aria-label="Close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -346,11 +386,11 @@ window.startApp = ({ fields, rows, assign, abroad, onSave }) => {
   // Called by cloud.js when tags change on another device.
   let remoteTimer;
   return {
-    applyRemote(newAssign, newAbroad) {
-      for (const k of Object.keys(assign)) if (!(k in newAssign)) delete assign[k];
-      Object.assign(assign, newAssign);
-      for (const k of Object.keys(abroad)) if (!(k in newAbroad)) delete abroad[k];
-      Object.assign(abroad, newAbroad);
+    applyRemote(next) {
+      for (const [cur, upd] of [[assign, next.assign], [abroad, next.abroad], [deceased, next.deceased]]) {
+        for (const k of Object.keys(cur)) if (!(k in upd)) delete cur[k];
+        Object.assign(cur, upd);
+      }
       clearTimeout(remoteTimer);
       remoteTimer = setTimeout(() => {
         if (parseHash().route === "voters") document.querySelectorAll(".voter, .sheet:not([hidden])").forEach(el => el.dataset.vid && refresh(el.dataset.vid));
