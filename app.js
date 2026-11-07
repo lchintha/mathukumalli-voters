@@ -175,7 +175,12 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
             <span class="ward-no">${w}</span>
             <div class="ward-info">
               <span class="ward-name">Ward ${w}</span>
-              <span class="ward-sub">${fmt(list.length)} voters${out ? ` · ${svg(ICON.plane, 12)} ${out}` : ""}${gone ? ` · <span class="dead-ic">${svg(ICON.deceased, 12)}</span> ${gone}` : ""}${dup ? ` · <span class="dup-ic">${svg(ICON.copy, 12)}</span> ${dup}` : ""}</span>
+              <span class="ward-sub">
+                <span>${fmt(list.length)} voters</span>${out ? `
+                <span class="ws abroad-ic" title="Out of country">${svg(ICON.plane, 13)}${out}</span>` : ""}${gone ? `
+                <span class="ws dead-ic" title="Deceased">${svg(ICON.deceased, 13)}${gone}</span>` : ""}${dup ? `
+                <span class="ws dup-ic" title="Duplicates">${svg(ICON.copy, 13)}${dup}</span>` : ""}
+              </span>
             </div>
             ${l ? `<span class="ward-lead" style="background:${l.color};color:${onColor(l.color)}">${l.name}</span>` : ""}
             <span class="ward-go">${svg(ICON.chevron, 18)}</span>

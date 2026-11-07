@@ -169,8 +169,10 @@ a.kpi:hover { border-color: var(--abroad); }
 }
 .ward-info { flex: 1; min-width: 0; display: grid; }
 .ward-name { font-weight: 600; }
-.ward-sub { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
-.ward-sub svg { color: var(--abroad); }
+.ward-sub { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; }
+.ward-sub > span { white-space: nowrap; }
+.ward-sub .ws { display: inline-flex; align-items: center; gap: 3px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ward-sub .abroad-ic { color: var(--abroad); }
 .ward-lead { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
 .ward-go { color: var(--muted); display: grid; }
 
