@@ -1,7 +1,8 @@
 // Sign-in, voter list loading and tag syncing via Firebase.
 // Firestore layout:
 //   data/voters      { fields, rows (JSON string), count }
-//   wards/{ward}     { party: { voterId: partyId }, abroad: { voterId: 1 }, deceased: { voterId: 1 } }
+//   wards/{ward}     { party: { voterId: partyId }, abroad: { voterId: 1 }, deceased: { voterId: 1 },
+//                     duplicate: { voterId: originalVoterId } }
 // Access is limited to approved Google accounts by Firestore security rules.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -139,17 +140,18 @@ function start(fields, rows) {
   };
 
   onSnapshot(collection(db, "wards"), snap => {
-    const assign = {}, abroad = {}, deceased = {};
+    const assign = {}, abroad = {}, deceased = {}, duplicate = {};
     snap.forEach(d => {
       Object.assign(assign, d.data().party || {});
       Object.assign(abroad, d.data().abroad || {});
       Object.assign(deceased, d.data().deceased || {});
+      Object.assign(duplicate, d.data().duplicate || {});
     });
     if (!ui) {
       ungate();
-      ui = window.startApp({ fields, rows, assign, abroad, deceased, onSave });
+      ui = window.startApp({ fields, rows, assign, abroad, deceased, duplicate, onSave });
     } else {
-      ui.applyRemote({ assign, abroad, deceased });
+      ui.applyRemote({ assign, abroad, deceased, duplicate });
     }
   }, e => gate(`<h2>Connection problem</h2><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Reload</button>`));
 }

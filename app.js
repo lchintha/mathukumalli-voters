@@ -1,8 +1,8 @@
 "use strict";
 
 // The UI. cloud.js signs in, loads the voter list and calls startApp().
-// `onSave(voterId, changes)` persists changes like { party: "tdp", abroad: null, deceased: 1 } (null clears).
-window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
+// `onSave(voterId, changes)` persists changes like { party: "tdp", abroad: null, deceased: 1, duplicate: "<voter id>" } (null clears).
+window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }) => {
 
   // ---------- Data ----------
   const F = fields;
@@ -39,6 +39,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
     help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/>',
     chevron: '<path d="m9 18 6-6-6-6"/>',
     deceased: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/>',
+    copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   };
 
   // ---------- Helpers ----------
@@ -58,10 +59,12 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
     clearTimeout(toast._t);
     toast._t = setTimeout(() => t.classList.remove("show"), 1800);
   };
-  const isDeceased = v => !!deceased[v.voter_id];
-  // Deceased voters have no party (null) and are left out of party counts.
-  const partyOf = v => (isDeceased(v) ? null : partyById(assign[v.voter_id]) ? assign[v.voter_id] : UNASSIGNED);
-  const isAbroad = v => !isDeceased(v) && !!abroad[v.voter_id];
+  const isDuplicate = v => !!duplicate[v.voter_id];
+  const isDeceased = v => !isDuplicate(v) && !!deceased[v.voter_id];
+  // Deceased and duplicate voters don't vote: they have no party (null) and are left out of party counts.
+  const isOut = v => isDeceased(v) || isDuplicate(v);
+  const partyOf = v => (isOut(v) ? null : partyById(assign[v.voter_id]) ? assign[v.voter_id] : UNASSIGNED);
+  const isAbroad = v => !isOut(v) && !!abroad[v.voter_id];
 
   function countParties(list) {
     const c = { [UNASSIGNED]: 0 };
@@ -117,7 +120,8 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
     const female = VOTERS.filter(v => v.gender === FEMALE).length;
     const away = VOTERS.filter(isAbroad).length;
     const dead = VOTERS.filter(isDeceased).length;
-    const living = total - dead;
+    const dupes = VOTERS.filter(isDuplicate).length;
+    const living = total - dead - dupes;
     const counts = countParties(VOTERS);
     const tagged = living - counts[UNASSIGNED];
     const lead = leading(counts);
@@ -137,7 +141,8 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
       kpi("male", "male", "Male", fmt(male), `${pct(male, total)}%`) +
       kpi("female", "female", "Female", fmt(female), `${pct(female, total)}%`) +
       kpi("plane", "abroad", "Out of country", fmt(away), `${pct(away, total)}% of voters`, "#voters?status=abroad") +
-      kpi("deceased", "deceased", "Deceased", fmt(dead), `${pct(dead, total)}% of voters`, "#voters?status=deceased");
+      kpi("deceased", "deceased", "Deceased", fmt(dead), `${pct(dead, total)}% of voters`, "#voters?status=deceased") +
+      kpi("copy", "duplicate", "Duplicates", fmt(dupes), `${pct(dupes, total)}% of voters`, "#voters?status=duplicate");
 
     $("#party-title").innerHTML = `${svg(ICON.vote)} Expected votes`;
     $("#tag-progress").textContent = `${fmt(tagged)} / ${fmt(living)} marked`;
@@ -162,6 +167,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
       const c = countParties(list);
       const out = list.filter(isAbroad).length;
       const gone = list.filter(isDeceased).length;
+      const dup = list.filter(isDuplicate).length;
       const l = leading(c);
       return `
         <a class="ward" href="#voters?ward=${w}">
@@ -169,7 +175,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
             <span class="ward-no">${w}</span>
             <div class="ward-info">
               <span class="ward-name">Ward ${w}</span>
-              <span class="ward-sub">${fmt(list.length)} voters${out ? ` · ${svg(ICON.plane, 12)} ${out}` : ""}${gone ? ` · <span class="dead-ic">${svg(ICON.deceased, 12)}</span> ${gone}` : ""}</span>
+              <span class="ward-sub">${fmt(list.length)} voters${out ? ` · ${svg(ICON.plane, 12)} ${out}` : ""}${gone ? ` · <span class="dead-ic">${svg(ICON.deceased, 12)}</span> ${gone}` : ""}${dup ? ` · <span class="dup-ic">${svg(ICON.copy, 12)}</span> ${dup}` : ""}</span>
             </div>
             ${l ? `<span class="ward-lead" style="background:${l.color};color:${onColor(l.color)}">${l.name}</span>` : ""}
             <span class="ward-go">${svg(ICON.chevron, 18)}</span>
@@ -193,9 +199,10 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
   }
 
   const STATUS = {
-    village: { label: "In village", test: v => !isDeceased(v) && !isAbroad(v) },
+    village: { label: "In village", test: v => !isOut(v) && !isAbroad(v) },
     abroad: { label: "Out of country", test: isAbroad },
     deceased: { label: "Deceased", test: isDeceased },
+    duplicate: { label: "Duplicate", test: isDuplicate },
   };
 
   // Numbers search గ్రా.పం.ఓ.జా.వ.సం.; anything else searches Voter ID.
@@ -237,27 +244,39 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
   }
 
   function pickerHTML(v) {
-    const cur = partyOf(v), away = isAbroad(v), dead = isDeceased(v);
-    const off = dead ? " disabled" : "";
+    const cur = partyOf(v), away = isAbroad(v), dead = isDeceased(v), dup = isDuplicate(v);
+    const off = dead || dup ? " disabled" : "";
     return PARTIES.map(p => `
       <button type="button" class="pp${cur === p.id ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-p="${p.id}"${off}
         style="--c:${p.color};--on:${onColor(p.color)}" aria-pressed="${cur === p.id}"><i></i>${p.name}</button>`).join("")
       + `<button type="button" class="pp abroad${away ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-abroad${off}
         aria-pressed="${away}" title="Out of country">${svg(ICON.plane, 14)}<span>Abroad</span></button>`
-      + `<button type="button" class="pp deceased${dead ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-dead
-        aria-pressed="${dead}" title="Deceased">${svg(ICON.deceased, 14)}<span>Deceased</span></button>`;
+      + `<button type="button" class="pp deceased${dead ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-dead${dup ? " disabled" : ""}
+        aria-pressed="${dead}" title="Deceased">${svg(ICON.deceased, 14)}<span>Deceased</span></button>`
+      + `<button type="button" class="pp duplicate${dup ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-dup${dead ? " disabled" : ""}
+        aria-pressed="${dup}" title="Duplicate of another voter">${svg(ICON.copy, 14)}<span>Duplicate</span></button>`;
+  }
+
+  // "Duplicate of …" for a duplicate entry, "Also listed as …" for the voter it duplicates.
+  function dupHTML(v) {
+    const ref = (o, label) => `<button type="button" class="v-dup" data-open="${esc(o.voter_id)}">${svg(ICON.copy, 12)} ${label} ${o.serial}<span class="v-dup-id"> · ${esc(o.voter_id)}</span></button>`;
+    const orig = BY_VID.get(duplicate[v.voter_id]);
+    if (orig) return ref(orig, "Duplicate of");
+    return Object.keys(duplicate).filter(k => duplicate[k] === v.voter_id)
+      .map(k => BY_VID.get(k)).filter(Boolean).map(o => ref(o, "Also listed as")).join("");
   }
 
   function voterHTML(v) {
     const p = partyById(partyOf(v));
     const male = v.gender === MALE;
     return `
-      <div class="voter${isAbroad(v) ? " is-abroad" : ""}${isDeceased(v) ? " is-dead" : ""}" data-vid="${esc(v.voter_id)}" style="--party-color:${p ? p.color : "var(--border)"}">
+      <div class="voter${isAbroad(v) ? " is-abroad" : ""}${isDeceased(v) ? " is-dead" : ""}${isDuplicate(v) ? " is-dup" : ""}" data-vid="${esc(v.voter_id)}" style="--party-color:${p ? p.color : "var(--border)"}">
         <div class="serial" title="గ్రా.పం.ఓ.జా.వ.సం.">${v.serial}</div>
         <div class="v-main">
           <div class="v-name" data-open="${esc(v.voter_id)}">${esc(v.name)}</div>
           <div class="v-rel">${esc(v.relation_type || "—")}: ${esc(v.relation_name || "—")}</div>
           <span class="v-id">${esc(v.voter_id)}</span>
+          <div class="dup-slot">${dupHTML(v)}</div>
         </div>
         <div class="v-loc">Ward ${v.ward} · H.No ${esc(v.house_no)}</div>
         <div class="v-age">${v.age} <span class="sex ${male ? "m" : "f"}">${male ? "M" : "F"}</span></div>
@@ -282,13 +301,15 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
       el.style.setProperty("--party-color", p ? p.color : "var(--border)");
       el.classList.toggle("is-abroad", isAbroad(v));
       el.classList.toggle("is-dead", isDeceased(v));
+      el.classList.toggle("is-dup", isDuplicate(v));
       el.querySelector(".party-pick").innerHTML = pickerHTML(v);
+      el.querySelector(".dup-slot").innerHTML = dupHTML(v);
     });
     return v;
   }
 
   function setParty(vid, pid) {
-    if (deceased[vid]) return;
+    if (deceased[vid] || duplicate[vid]) return;
     if (assign[vid] === pid) delete assign[vid];
     else assign[vid] = pid;
     onSave(vid, { party: assign[vid] || null });
@@ -297,7 +318,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
   }
 
   function toggleAbroad(vid) {
-    if (deceased[vid]) return;
+    if (deceased[vid] || duplicate[vid]) return;
     if (abroad[vid]) delete abroad[vid];
     else abroad[vid] = 1;
     onSave(vid, { abroad: abroad[vid] || null });
@@ -308,6 +329,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
   // Marking deceased clears the voter's party and abroad marks.
   function toggleDeceased(vid) {
     const v = BY_VID.get(vid);
+    if (duplicate[vid]) return;
     if (deceased[vid]) {
       delete deceased[vid];
       onSave(vid, { deceased: null });
@@ -323,10 +345,54 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
     toast(deceased[vid] ? `${v.name}: marked deceased` : `${v.name}: deceased mark removed`);
   }
 
+  // Finds a voter by గ్రా.పం.ఓ.జా.వ.సం. or Voter ID.
+  function findVoter(text) {
+    const raw = String(text || "").trim().toUpperCase();
+    if (!raw) return null;
+    return VOTERS.find(/^\d+$/.test(raw) ? v => String(v.serial) === raw : v => v._vid === raw) || null;
+  }
+
+  // A duplicate entry points at the voter it repeats; like deceased, it clears and locks the other marks.
+  function toggleDuplicate(vid) {
+    const v = BY_VID.get(vid);
+    if (deceased[vid] && !duplicate[vid]) return;
+    if (duplicate[vid]) {
+      delete duplicate[vid];
+      onSave(vid, { duplicate: null });
+      refreshDupLinks(vid);
+      return toast(`${v.name}: duplicate mark removed`);
+    }
+    const input = prompt(`${v.name} (${v.serial}) is a duplicate of which voter?\nEnter their గ్రా.పం.ఓ.జా.వ.సం. or Voter ID.`);
+    if (input == null) return;
+    let o = findVoter(input);
+    while (o && duplicate[o.voter_id]) o = BY_VID.get(duplicate[o.voter_id]);
+    if (!o) return alert(`No voter found for “${input.trim()}”.`);
+    if (o === v) return alert("A voter can't be a duplicate of themselves.");
+    const p = partyById(assign[vid]);
+    if (!confirm(`Mark ${v.name} (${v.serial} · ${v.voter_id}) as a duplicate of ${o.name} (${o.serial} · ${o.voter_id})?`
+      + (p ? `\n\nTheir ${p.name} mark will be removed.` : ""))) return;
+    // Anything that pointed at this voter now points at the original.
+    for (const k of Object.keys(duplicate)) if (duplicate[k] === vid) { duplicate[k] = o.voter_id; onSave(k, { duplicate: o.voter_id }); }
+    duplicate[vid] = o.voter_id;
+    delete assign[vid];
+    delete abroad[vid];
+    delete deceased[vid];
+    onSave(vid, { duplicate: o.voter_id, party: null, abroad: null, deceased: null });
+    refreshDupLinks(vid, o.voter_id);
+    toast(`${v.name}: duplicate of ${o.serial}`);
+  }
+  function refreshDupLinks(...vids) {
+    const all = new Set(vids);
+    Object.entries(duplicate).forEach(([k, o]) => { if (all.has(o)) all.add(k); });
+    document.querySelectorAll(".voter[data-vid], .sheet[data-vid]").forEach(el => all.add(el.dataset.vid));
+    all.forEach(k => BY_VID.has(k) && refresh(k));
+  }
+
   document.addEventListener("click", e => {
     const pp = e.target.closest(".pp");
     if (pp) {
       if ("dead" in pp.dataset) return toggleDeceased(pp.dataset.vid);
+      if ("dup" in pp.dataset) return toggleDuplicate(pp.dataset.vid);
       return "abroad" in pp.dataset ? toggleAbroad(pp.dataset.vid) : setParty(pp.dataset.vid, pp.dataset.p);
     }
     const open = e.target.closest("[data-open]");
@@ -354,13 +420,14 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
     if (!v) return;
     const s = $("#sheet");
     s.dataset.vid = vid;
-    s.className = "sheet" + (isAbroad(v) ? " is-abroad" : "") + (isDeceased(v) ? " is-dead" : "");
+    s.className = "sheet" + (isAbroad(v) ? " is-abroad" : "") + (isDeceased(v) ? " is-dead" : "") + (isDuplicate(v) ? " is-dup" : "");
     s.innerHTML = `
       <button class="icon-btn close" type="button" data-close aria-label="Close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
       <h3 id="sheet-name">${esc(v.name)}</h3>
       <span class="v-id">${esc(v.voter_id)}</span>
+      <div class="dup-slot">${dupHTML(v)}</div>
       <dl>
         <dt>గ్రా.పం.ఓ.జా.వ.సం.</dt><dd>${v.serial}</dd>
         <dt>వార్డు (Ward)</dt><dd>${v.ward}</dd>
@@ -387,7 +454,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, onSave }) => {
   let remoteTimer;
   return {
     applyRemote(next) {
-      for (const [cur, upd] of [[assign, next.assign], [abroad, next.abroad], [deceased, next.deceased]]) {
+      for (const [cur, upd] of [[assign, next.assign], [abroad, next.abroad], [deceased, next.deceased], [duplicate, next.duplicate]]) {
         for (const k of Object.keys(cur)) if (!(k in upd)) delete cur[k];
         Object.assign(cur, upd);
       }
