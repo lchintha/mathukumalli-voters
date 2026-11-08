@@ -66,6 +66,47 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
   const partyOf = v => (isOut(v) ? null : partyById(assign[v.voter_id]) ? assign[v.voter_id] : UNASSIGNED);
   const isAbroad = v => !isOut(v) && !!abroad[v.voter_id];
 
+  // ---------- Name search ----------
+  // Telugu names are spelled out in English letters (never shown), then both the name and
+  // what was typed are reduced to a loose key so common spelling differences still match.
+  const TE_VOWELS = { "అ": "a", "ఆ": "aa", "ఇ": "i", "ఈ": "ii", "ఉ": "u", "ఊ": "uu", "ఋ": "ri", "ౠ": "ri",
+    "ఎ": "e", "ఏ": "e", "ఐ": "ai", "ఒ": "o", "ఓ": "o", "ఔ": "au" };
+  const TE_SIGNS = { "ా": "aa", "ి": "i", "ీ": "ii", "ు": "u", "ూ": "uu", "ృ": "ri", "ౄ": "ri",
+    "ె": "e", "ే": "e", "ై": "ai", "ొ": "o", "ో": "o", "ౌ": "au" };
+  const TE_CONS = { "క": "k", "ఖ": "kh", "గ": "g", "ఘ": "gh", "ఙ": "n", "చ": "ch", "ఛ": "chh", "జ": "j", "ఝ": "jh", "ఞ": "n",
+    "ట": "t", "ఠ": "th", "డ": "d", "ఢ": "dh", "ణ": "n", "త": "t", "థ": "th", "ద": "d", "ధ": "dh", "న": "n",
+    "ప": "p", "ఫ": "ph", "బ": "b", "భ": "bh", "మ": "m", "య": "y", "ర": "r", "ఱ": "r", "ల": "l", "ళ": "l", "వ": "v",
+    "శ": "sh", "ష": "sh", "స": "s", "హ": "h", "ౘ": "ts", "ౙ": "dz" };
+  const VIRAMA = "్";
+
+  function teluguToLatin(text) {
+    let out = "";
+    const chars = [...String(text)];
+    chars.forEach((ch, i) => {
+      if (TE_CONS[ch]) {
+        const next = chars[i + 1];
+        out += TE_CONS[ch] + (next === VIRAMA || TE_SIGNS[next] ? "" : "a");
+      } else if (TE_SIGNS[ch] || TE_VOWELS[ch]) out += TE_SIGNS[ch] || TE_VOWELS[ch];
+      else if (ch === "ం" || ch === "ఁ") out += "m";
+      else if (ch === "ః") out += "h";
+      else if (ch !== VIRAMA) out += ch;
+    });
+    return out;
+  }
+
+  // Order matters: sound groups first, then vowel lengths, then doubled letters.
+  const KEY_RULES = [
+    [/[^a-z]+/g, " "],
+    [/x/g, "ks"], [/q/g, "k"], [/z/g, "j"], [/f/g, "p"], [/w/g, "v"],
+    [/([bcdgjkpt])h/g, "$1"], [/sh/g, "s"],
+    [/ee|ii/g, "i"], [/oo|uu/g, "u"], [/aa/g, "a"],
+    [/m(?=[^aeiouy ]|$)/g, "n"],
+    [/h\b/g, ""], [/\bea/g, "e"], [/\bi/g, "e"],
+    [/ayu/g, "ai"], [/ayi/g, "ai"], [/avu\b/g, "ao"], [/aia\b/g, "aya"], [/y\b/g, "i"],
+    [/([a-z])\1+/g, "$1"],
+  ];
+  const nameKey = text => KEY_RULES.reduce((t, [re, to]) => t.replace(re, to), teluguToLatin(text).toLowerCase()).trim();
+
   function countParties(list) {
     const c = { [UNASSIGNED]: 0 };
     PARTIES.forEach(p => (c[p.id] = 0));
@@ -210,23 +251,35 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     duplicate: { label: "Duplicate", test: isDuplicate },
   };
 
-  // Numbers search గ్రా.పం.ఓ.జా.వ.సం.; anything else searches Voter ID.
+  // Numbers search గ్రా.పం.ఓ.జా.వ.సం.; letters with numbers search Voter ID; anything else searches names
+  // (and the start of Voter IDs, so a typed ID prefix still finds voters).
+  // Name matches are scored so names whose words start with what was typed come first.
   function matcher() {
     const raw = $("#q").value.trim().toUpperCase();
     if (!raw) return null;
     if (/^\d+$/.test(raw)) return v => String(v.serial) === raw;
-    return v => v._vid.includes(raw);
+    if (/\d/.test(raw)) return v => v._vid.includes(raw);
+    const words = nameKey(raw).split(" ").filter(Boolean);
+    if (!words.length) return null;
+    return v => {
+      if (v._vid.startsWith(raw)) return 1;
+      const key = " " + (v._nameKey ??= nameKey(v.name));
+      if (!words.every(w => key.includes(w))) return false;
+      return 1 + words.filter(w => key.includes(" " + w)).length;
+    };
   }
 
   function renderVoters() {
     const ward = $("#f-ward").value, gender = $("#f-gender").value, party = $("#f-party").value, status = $("#f-status").value;
     const m = matcher();
+    const score = new Map();
     filtered = VOTERS.filter(v =>
       (!ward || v.ward === +ward) &&
       (!gender || v.gender === gender) &&
       (!party || partyOf(v) === party) &&
       (!status || STATUS[status].test(v)) &&
-      (!m || m(v)));
+      (!m || score.set(v, m(v)).get(v)));
+    if (m) filtered.sort((a, b) => score.get(b) - score.get(a));
     shown = 0;
     $("#voter-list").innerHTML = "";
     $("#result-count").textContent = `${fmt(filtered.length)} voter${filtered.length === 1 ? "" : "s"}`;
@@ -241,7 +294,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
       + (chips.length > 1 ? `<button class="pill-x clear" data-k="all" type="button">Clear all</button>` : "");
 
     if (!filtered.length) {
-      $("#voter-list").innerHTML = `<div class="empty">No voters found.<br><span class="small">Search with గ్రా.పం.ఓ.జా. వ.సం. (e.g. 1500) or Voter ID (e.g. SZO1234567).</span></div>`;
+      $("#voter-list").innerHTML = `<div class="empty">No voters found.<br><span class="small">Search with గ్రా.పం.ఓ.జా. వ.సం. (e.g. 1500), Voter ID (e.g. SZO1234567) or name (e.g. venkat).<br>For names, try fewer letters if nothing shows up.</span></div>`;
       $("#load-more").hidden = true;
       return;
     }
