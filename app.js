@@ -34,10 +34,6 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     female: '<g fill="currentColor" stroke="none"><circle cx="12" cy="4" r="2.6"/><path d="M9.8 8h4.4a1.5 1.5 0 0 1 1.45 1.1L17.5 16h-3v6h-2v-5h-1v5h-2v-6h-3l1.85-6.9A1.5 1.5 0 0 1 9.8 8z"/></g>',
     plane: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
     vote: '<path d="m9 12 2 2 4-4"/><path d="M5 7c0-1.1.9-2 2-2h10a2 2 0 0 1 2 2v12H5V7Z"/><path d="M22 19H2"/>',
-    map: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
-    trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
-    help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/>',
-    chevron: '<path d="m9 18 6-6-6-6"/>',
     deceased: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/>',
     copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   };
@@ -155,80 +151,63 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
   }
 
   // ---------- Dashboard ----------
+  // Small totals on top, then a row per ward with each party's expected votes.
+  const COLS = [...PARTIES, { id: UNASSIGNED, name: "Not marked", color: "var(--unmarked)" }];
+
   function renderDashboard() {
     const total = VOTERS.length;
-    const male = VOTERS.filter(v => v.gender === MALE).length;
-    const female = VOTERS.filter(v => v.gender === FEMALE).length;
-    const away = VOTERS.filter(isAbroad).length;
-    const dead = VOTERS.filter(isDeceased).length;
-    const dupes = VOTERS.filter(isDuplicate).length;
-    const living = total - dead - dupes;
+    const living = VOTERS.filter(v => !isOut(v)).length;
     const counts = countParties(VOTERS);
-    const tagged = living - counts[UNASSIGNED];
-    const lead = leading(counts);
+    const n = test => VOTERS.filter(test).length;
 
-    const kpi = (icon, tone, label, value, sub, link) => `
-      <${link ? `a href="${link}"` : "div"} class="kpi">
-        <span class="kpi-icon ${tone}">${svg(ICON[icon], icon === "male" || icon === "female" ? 28 : 22)}</span>
-        <div>
-          <div class="kpi-label">${label}</div>
-          <div class="kpi-value">${value}</div>
-          <div class="kpi-sub">${sub}</div>
-        </div>
+    const stat = (icon, color, label, value, link) => `
+      <${link ? `a href="${link}"` : "div"} class="stat">
+        <span class="stat-icon" style="--c:${color}">${svg(ICON[icon], 18)}</span>
+        <div><div class="stat-value">${fmt(value)}</div><div class="stat-label">${label}</div></div>
       </${link ? "a" : "div"}>`;
+    $("#stats").innerHTML =
+      stat("users", "var(--brand-2)", "Total voters", total) +
+      stat("male", "var(--male)", "Male", n(v => v.gender === MALE), "#voters?gender=" + encodeURIComponent(MALE)) +
+      stat("female", "var(--female)", "Female", n(v => v.gender === FEMALE), "#voters?gender=" + encodeURIComponent(FEMALE)) +
+      stat("plane", "var(--abroad)", "Out of country", n(isAbroad), "#voters?status=abroad") +
+      stat("deceased", "var(--deceased)", "Deceased", n(isDeceased), "#voters?status=deceased") +
+      stat("copy", "var(--duplicate)", "Duplicates", n(isDuplicate), "#voters?status=duplicate");
+    $("#tag-progress").textContent = `${fmt(living - counts[UNASSIGNED])} / ${fmt(living)} marked`;
 
-    $("#kpis").innerHTML =
-      kpi("users", "brand", "Total voters", fmt(total), `${WARDS.length} wards`) +
-      kpi("male", "male", "Male", fmt(male), `${pct(male, total)}%`) +
-      kpi("female", "female", "Female", fmt(female), `${pct(female, total)}%`) +
-      kpi("plane", "abroad", "Out of country", fmt(away), `${pct(away, total)}% of voters`, "#voters?status=abroad") +
-      kpi("deceased", "deceased", "Deceased", fmt(dead), `${pct(dead, total)}% of voters`, "#voters?status=deceased") +
-      kpi("copy", "duplicate", "Duplicates", fmt(dupes), `${pct(dupes, total)}% of voters`, "#voters?status=duplicate");
+    $("#ward-title").innerHTML = `${svg(ICON.vote)} Votes by ward`;
+    const head = `
+      <div class="wt-row wt-head">
+        <span>Ward</span><span>Voters</span>
+        ${COLS.map(p => `<span class="num"><i style="--c:${p.color}"></i>${p.name}</span>`).join("")}
+        <span style="justify-self:end">Leading</span>
+      </div>`;
+    $("#wards").innerHTML = head
+      + wardRow(null, VOTERS)
+      + WARDS.map(w => wardRow(w, VOTERS.filter(v => v.ward === w))).join("");
+  }
 
-    $("#party-title").innerHTML = `${svg(ICON.vote)} Expected votes`;
-    $("#tag-progress").textContent = `${fmt(tagged)} / ${fmt(living)} marked`;
-    $("#party-stack").innerHTML = stackBar(counts);
-
-    const tile = (id, name, color, n, extra = "") => `
-      <a class="party-tile${extra}" href="#voters?party=${id}" style="--c:${color}">
-        <span class="party-badge" style="background:${color};color:${onColor(color)}">${
-          id === UNASSIGNED ? svg(ICON.help, 18) : esc(name.slice(0, 1))}</span>
-        <span class="party-name">${esc(name)}${lead && lead.id === id ? `<span class="lead-tag">${svg(ICON.trophy, 12)} Leading</span>` : ""}</span>
-        <span class="party-count">${fmt(n)}</span>
-        <span class="party-pct">${pct(n, living)}%</span>
-        <span class="party-meter"><i style="width:${pct(n, living)}%"></i></span>
-      </a>`;
-    $("#party-tiles").innerHTML =
-      PARTIES.map(p => tile(p.id, p.name, p.color, counts[p.id])).join("") +
-      tile(UNASSIGNED, "Not marked", "var(--surface-2)", counts[UNASSIGNED], " unmarked");
-
-    $("#ward-title").innerHTML = `${svg(ICON.map)} Wards`;
-    $("#wards").innerHTML = WARDS.map(w => {
-      const list = VOTERS.filter(v => v.ward === w);
-      const c = countParties(list);
-      const out = list.filter(isAbroad).length;
-      const gone = list.filter(isDeceased).length;
-      const dup = list.filter(isDuplicate).length;
-      const l = leading(c);
-      return `
-        <a class="ward" href="#voters?ward=${w}">
-          <div class="ward-top">
-            <span class="ward-no">${w}</span>
-            <div class="ward-info">
-              <span class="ward-name">Ward ${w}</span>
-              <span class="ward-sub">
-                <span>${fmt(list.length)} voters</span>${out ? `
-                <span class="ws abroad-ic" title="Out of country">${svg(ICON.plane, 13)}${out}</span>` : ""}${gone ? `
-                <span class="ws dead-ic" title="Deceased">${svg(ICON.deceased, 13)}${gone}</span>` : ""}${dup ? `
-                <span class="ws dup-ic" title="Duplicates">${svg(ICON.copy, 13)}${dup}</span>` : ""}
-              </span>
-            </div>
-            ${l ? `<span class="ward-lead" style="background:${l.color};color:${onColor(l.color)}">${l.name}</span>` : ""}
-            <span class="ward-go">${svg(ICON.chevron, 18)}</span>
-          </div>
-          <div class="stackbar thin">${stackBar(c)}</div>
-        </a>`;
-    }).join("");
+  function wardRow(ward, list) {
+    const c = countParties(list);
+    const counted = list.filter(v => !isOut(v)).length;
+    const link = extra => "#voters?" + new URLSearchParams({ ...(ward ? { ward } : {}), ...extra });
+    const marks = [[isAbroad, "plane", "ic-abroad", "Out of country"], [isDeceased, "deceased", "ic-dead", "Deceased"], [isDuplicate, "copy", "ic-dup", "Duplicates"]]
+      .map(([test, icon, cls, title]) => { const k = list.filter(test).length; return k ? `<span class="${cls}" title="${title}">${svg(ICON[icon], 11)}${k}</span>` : ""; })
+      .join("");
+    const lead = leading(c);
+    const second = lead ? Math.max(0, ...PARTIES.filter(p => p.id !== "neutral" && p.id !== lead.id).map(p => c[p.id])) : 0;
+    return `
+      <div class="wt-row${ward ? "" : " wt-total"}">
+        <a class="wt-ward" href="${link({})}"><span class="ward-no">${ward ?? "All"}</span><span class="wt-name">${ward ? `Ward ${ward}` : "All wards"}</span></a>
+        <a class="wt-voters" href="${link({})}"><b>${fmt(list.length)}</b>${marks ? `<small>${marks}</small>` : ""}</a>
+        ${COLS.map(p => `
+          <a class="wt-cell${c[p.id] ? "" : " zero"}" href="${link({ party: p.id })}" data-label="${p.id === UNASSIGNED ? "Unmarked" : p.name}" style="--c:${p.color}">
+            <b>${fmt(c[p.id])}</b><small>${pct(c[p.id], counted)}%</small>
+          </a>`).join("")}
+        <span class="wt-lead">${lead
+          ? `<span class="lead-badge" style="background:${lead.color};color:${onColor(lead.color)}">${lead.name}</span>${c[lead.id] > second ? `<small>+${fmt(c[lead.id] - second)}</small>` : ""}`
+          : `<small>—</small>`}</span>
+        <div class="stackbar wt-bar">${stackBar(c)}</div>
+      </div>`;
   }
 
   // ---------- Voters ----------
@@ -301,18 +280,22 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     more();
   }
 
+  // Party and mark buttons, shown in the voter sheet.
   function pickerHTML(v) {
     const cur = partyOf(v), away = isAbroad(v), dead = isDeceased(v), dup = isDuplicate(v);
     const off = dead || dup ? " disabled" : "";
-    return PARTIES.map(p => `
-      <button type="button" class="pp${cur === p.id ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-p="${p.id}"${off}
-        style="--c:${p.color};--on:${onColor(p.color)}" aria-pressed="${cur === p.id}"><i></i>${p.name}</button>`).join("")
-      + `<button type="button" class="pp abroad${away ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-abroad${off}
-        aria-pressed="${away}" title="Out of country">${svg(ICON.plane, 14)}<span>Abroad</span></button>`
-      + `<button type="button" class="pp deceased${dead ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-dead${dup ? " disabled" : ""}
-        aria-pressed="${dead}" title="Deceased">${svg(ICON.deceased, 14)}<span>Deceased</span></button>`
-      + `<button type="button" class="pp duplicate${dup ? " on" : ""}" data-vid="${esc(v.voter_id)}" data-dup${dead ? " disabled" : ""}
-        aria-pressed="${dup}" title="Duplicate of another voter">${svg(ICON.copy, 14)}<span>Duplicate</span></button>`;
+    const vid = esc(v.voter_id);
+    return `<div class="party-pick">${PARTIES.map(p => `
+      <button type="button" class="pp${cur === p.id ? " on" : ""}" data-vid="${vid}" data-p="${p.id}"${off}
+        style="--c:${p.color};--on:${onColor(p.color)}" aria-pressed="${cur === p.id}"><i></i>${p.name}</button>`).join("")}</div>
+      <div class="marks">
+        <button type="button" class="pp abroad${away ? " on" : ""}" data-vid="${vid}" data-abroad${off}
+          aria-pressed="${away}">${svg(ICON.plane, 14)}<span>Abroad</span></button>
+        <button type="button" class="pp deceased${dead ? " on" : ""}" data-vid="${vid}" data-dead${dup ? " disabled" : ""}
+          aria-pressed="${dead}">${svg(ICON.deceased, 14)}<span>Deceased</span></button>
+        <button type="button" class="pp duplicate${dup ? " on" : ""}" data-vid="${vid}" data-dup${dead ? " disabled" : ""}
+          aria-pressed="${dup}">${svg(ICON.copy, 14)}<span>Duplicate</span></button>
+      </div>`;
   }
 
   // "Duplicate of …" for a duplicate entry, "Also listed as …" for the voter it duplicates.
@@ -324,21 +307,22 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
       .map(k => BY_VID.get(k)).filter(Boolean).map(o => ref(o, "Also listed as")).join("");
   }
 
+  // A compact tile; tapping it opens the full details and the party buttons.
   function voterHTML(v) {
     const p = partyById(partyOf(v));
     const male = v.gender === MALE;
+    const tags = isDeceased(v) ? `<span class="tag dead">Deceased</span>`
+      : isDuplicate(v) ? `<span class="tag dup">Duplicate</span>`
+      : (p ? `<span class="tag" style="background:${p.color};color:${onColor(p.color)}">${p.name}</span>` : `<span class="tag none">Not marked</span>`)
+        + (isAbroad(v) ? `<span class="tag abroad" title="Out of country">${svg(ICON.plane, 12)}</span>` : "");
     return `
       <div class="voter${isAbroad(v) ? " is-abroad" : ""}${isDeceased(v) ? " is-dead" : ""}${isDuplicate(v) ? " is-dup" : ""}" data-vid="${esc(v.voter_id)}" style="--party-color:${p ? p.color : "var(--border)"}">
         <div class="serial" title="గ్రా.పం.ఓ.జా.వ.సం.">${v.serial}</div>
         <div class="v-main">
-          <div class="v-name" data-open="${esc(v.voter_id)}">${esc(v.name)}</div>
-          <div class="v-rel">${esc(v.relation_type || "—")}: ${esc(v.relation_name || "—")}</div>
-          <span class="v-id">${esc(v.voter_id)}</span>
-          <div class="dup-slot">${dupHTML(v)}</div>
+          <div class="v-name">${esc(v.name)}</div>
+          <div class="v-meta"><span class="v-id">${esc(v.voter_id)}</span><span>${v.age} <span class="sex ${male ? "m" : "f"}">${male ? "M" : "F"}</span></span></div>
         </div>
-        <div class="v-loc">Ward ${v.ward} · H.No ${esc(v.house_no)}</div>
-        <div class="v-age">${v.age} <span class="sex ${male ? "m" : "f"}">${male ? "M" : "F"}</span></div>
-        <div class="party-pick">${pickerHTML(v)}</div>
+        <div class="v-tags">${tags}</div>
       </div>`;
   }
 
@@ -353,16 +337,13 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
 
   function refresh(vid) {
     const v = BY_VID.get(vid);
-    const sel = CSS.escape(vid);
-    document.querySelectorAll(`.voter[data-vid="${sel}"], .sheet[data-vid="${sel}"]`).forEach(el => {
-      const p = partyById(partyOf(v));
-      el.style.setProperty("--party-color", p ? p.color : "var(--border)");
-      el.classList.toggle("is-abroad", isAbroad(v));
-      el.classList.toggle("is-dead", isDeceased(v));
-      el.classList.toggle("is-dup", isDuplicate(v));
-      el.querySelector(".party-pick").innerHTML = pickerHTML(v);
-      el.querySelector(".dup-slot").innerHTML = dupHTML(v);
-    });
+    document.querySelectorAll(`.voter[data-vid="${CSS.escape(vid)}"]`).forEach(el => (el.outerHTML = voterHTML(v)));
+    const s = $("#sheet");
+    if (s.dataset.vid === vid) {
+      s.className = sheetClass(v);
+      s.querySelector(".pick").innerHTML = pickerHTML(v);
+      s.querySelector(".dup-slot").innerHTML = dupHTML(v);
+    }
     return v;
   }
 
@@ -442,7 +423,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
   function refreshDupLinks(...vids) {
     const all = new Set(vids);
     Object.entries(duplicate).forEach(([k, o]) => { if (all.has(o)) all.add(k); });
-    document.querySelectorAll(".voter[data-vid], .sheet[data-vid]").forEach(el => all.add(el.dataset.vid));
+    document.querySelectorAll(".voter[data-vid], .sheet[data-vid]").forEach(el => el.dataset.vid && all.add(el.dataset.vid));
     all.forEach(k => BY_VID.has(k) && refresh(k));
   }
 
@@ -455,8 +436,9 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     }
     const open = e.target.closest("[data-open]");
     if (open) return openSheet(open.dataset.open);
-    const ward = e.target.closest("a.ward, a.party-tile, a.kpi");
-    if (ward) resetFilters();
+    const tile = e.target.closest(".voter");
+    if (tile) return openSheet(tile.dataset.vid);
+    if (e.target.closest("#view-dashboard a")) resetFilters();
   });
 
   let qTimer;
@@ -473,12 +455,14 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
   });
 
   // ---------- Detail sheet ----------
+  const sheetClass = v => "sheet" + (isDeceased(v) ? " is-dead" : "") + (isDuplicate(v) ? " is-dup" : "");
+
   function openSheet(vid) {
     const v = BY_VID.get(vid);
     if (!v) return;
     const s = $("#sheet");
     s.dataset.vid = vid;
-    s.className = "sheet" + (isAbroad(v) ? " is-abroad" : "") + (isDeceased(v) ? " is-dead" : "") + (isDuplicate(v) ? " is-dup" : "");
+    s.className = sheetClass(v);
     s.innerHTML = `
       <button class="icon-btn close" type="button" data-close aria-label="Close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -494,8 +478,8 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
         <dt>ఇంటి సంఖ్య</dt><dd>${esc(v.house_no)}</dd>
         <dt>అ.ఓ.జా.వ.సం.</dt><dd>${esc(v.ac_serial)}</dd>
       </dl>
-      <div class="muted small">Expected party</div>
-      <div class="party-pick">${pickerHTML(v)}</div>`;
+      <div class="pick-label">Expected party</div>
+      <div class="pick">${pickerHTML(v)}</div>`;
     s.hidden = false;
     $("#sheet-backdrop").hidden = false;
   }
@@ -518,7 +502,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
       }
       clearTimeout(remoteTimer);
       remoteTimer = setTimeout(() => {
-        if (parseHash().route === "voters") document.querySelectorAll(".voter, .sheet:not([hidden])").forEach(el => el.dataset.vid && refresh(el.dataset.vid));
+        if (parseHash().route === "voters") document.querySelectorAll(".voter, .sheet").forEach(el => el.dataset.vid && refresh(el.dataset.vid));
         else renderDashboard();
       }, 100);
     },

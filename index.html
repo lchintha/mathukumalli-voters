@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f3d3e">
+  <meta name="color-scheme" content="light">
   <title>Mathukumalli Voters</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,11 +23,11 @@
       </div>
     </div>
     <nav class="tabs" aria-label="Main" hidden>
-      <a href="#dashboard" data-route="dashboard" class="tab">
+      <a href="#dashboard" data-route="dashboard" class="tab" title="Dashboard" aria-label="Dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
         <span>Dashboard</span>
       </a>
-      <a href="#voters" data-route="voters" class="tab">
+      <a href="#voters" data-route="voters" class="tab" title="Voters" aria-label="Voters">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span>Voters</span>
       </a>
@@ -43,25 +44,17 @@
     <section id="view-dashboard" class="view" hidden>
       <div class="page-head">
         <h1>Dashboard</h1>
+        <span class="chip-muted" id="tag-progress"></span>
       </div>
 
-      <div class="kpis" id="kpis"></div>
-
-      <article class="card">
-        <div class="card-head">
-          <h2 class="with-icon" id="party-title"></h2>
-          <span class="chip-muted" id="tag-progress"></span>
-        </div>
-        <div class="stackbar" id="party-stack"></div>
-        <div class="party-tiles" id="party-tiles"></div>
-      </article>
+      <div class="card stats" id="stats"></div>
 
       <article class="card">
         <div class="card-head">
           <h2 class="with-icon" id="ward-title"></h2>
-          <span class="muted small">Tap a ward to see its voters</span>
+          <span class="muted small">Tap a number to see those voters</span>
         </div>
-        <div class="wards" id="wards"></div>
+        <div class="wt" id="wards"></div>
       </article>
     </section>
 
@@ -109,13 +102,6 @@
         <div class="active-filters" id="active-filters"></div>
       </div>
 
-      <div class="voter-table-head" aria-hidden="true">
-        <span>గ్రా.పం.ఓ.జా. వ.సం.</span>
-        <span>Voter</span>
-        <span>Ward · House</span>
-        <span>Age / Sex</span>
-        <span>Party</span>
-      </div>
       <div id="voter-list" class="voter-list"></div>
       <div class="list-foot">
         <button class="btn" id="load-more" type="button" hidden>Show more</button>
