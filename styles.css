@@ -200,12 +200,21 @@ select:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3p
 /* ---------- Voter grid ---------- */
 .voter-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .voter {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: start;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-  padding: 12px 14px; box-shadow: var(--shadow); cursor: pointer;
+  padding: 12px; box-shadow: var(--shadow); cursor: pointer;
   border-left: 4px solid var(--party-color, var(--border));
   transition: border-color .12s, box-shadow .12s;
 }
+.v-photo, .sheet-photo {
+  display: grid; place-items: center; object-fit: cover; flex: none;
+  background: var(--surface-2); color: var(--muted); font-weight: 600;
+}
+.v-photo { width: 52px; height: 68px; border-radius: 8px; font-size: 20px; }
+.sheet-photo { width: 96px; height: 128px; border-radius: 12px; font-size: 36px; }
+.v-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 2px; }
+.voter.is-dead .v-photo, .voter.is-dup .v-photo { filter: grayscale(1); opacity: .6; }
+.sheet-head { display: flex; gap: 14px; align-items: flex-start; padding-right: 28px; }
 .voter:hover { box-shadow: 0 4px 14px rgba(16, 40, 38, .1); }
 .voter.is-abroad { background: color-mix(in srgb, var(--abroad) 5%, var(--surface)); }
 .voter.is-dead, .voter.is-dup { background: var(--surface-2); }
@@ -226,7 +235,7 @@ select:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3p
 .sex { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
 .sex.m { background: color-mix(in srgb, var(--male) 15%, transparent); color: var(--male); }
 .sex.f { background: color-mix(in srgb, var(--female) 15%, transparent); color: var(--female); }
-.v-tags { display: grid; justify-items: end; gap: 4px; }
+.v-tags { display: flex; justify-content: flex-end; align-items: center; gap: 4px; min-width: 0; }
 .tag {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 99px; white-space: nowrap;
@@ -251,7 +260,7 @@ select:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3p
   border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 12px 40px rgba(0,0,0,.2);
   padding: 20px;
 }
-.sheet h3 { margin: 0 0 4px; font-size: 20px; padding-right: 32px; }
+.sheet h3 { margin: 0 0 4px; font-size: 20px; }
 .sheet .close { position: absolute; right: 12px; top: 12px; }
 .sheet dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin: 16px 0; font-size: 14px; }
 .sheet dt { color: var(--muted); font-size: 13px; }
@@ -378,21 +387,18 @@ select:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3p
   .pp { padding: 7px 6px; }
 }
 
-/* Smaller screens (three per row, two on phones): each tile stacks serial and tag, then name, then ID. */
+/* Smaller screens: three per row, two on phones. */
 @media (max-width: 1000px) {
   .voter-list { gap: 8px; }
-  .voter {
-    grid-template-columns: auto minmax(0, 1fr); gap: 4px 6px; padding: 10px;
-    grid-template-areas: "serial tags" "main main";
-  }
-  .voter .serial { grid-area: serial; min-width: 0; font-size: 14px; }
-  .voter .v-tags { grid-area: tags; display: flex; justify-content: flex-end; align-items: center; gap: 3px; min-width: 0; }
-  .voter .v-main { grid-area: main; }
+  .voter { padding: 10px; gap: 10px; }
+  .voter .serial { font-size: 14px; min-width: 0; }
   .voter .v-name { font-size: 14px; }
 }
 @media (max-width: 640px) {
   .voter-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .voter { padding: 8px; border-left-width: 3px; border-radius: 10px; }
+  .voter { padding: 8px; gap: 8px; border-left-width: 3px; border-radius: 10px; }
+  .voter .v-photo { width: 40px; height: 53px; border-radius: 6px; font-size: 16px; }
+  .sheet-photo { width: 84px; height: 112px; }
   .voter .v-name { font-size: 13px; line-height: 1.3; min-height: 2.6em; }
   .voter .v-meta { gap: 4px; margin-top: 3px; }
   .voter .v-id { font-size: 10px; padding: 1px 4px; }
@@ -401,3 +407,13 @@ select:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3p
   .voter .tag { font-size: 10px; padding: 1px 6px; }
   .voter .tag.abroad { padding: 1px 4px; }
 }
+
+/* ---------- One-time photo upload bar ---------- */
+.upload-bar {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 35;
+  display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.15); padding: 10px 12px; font-size: 14px;
+}
+.upload-bar .btn { padding: 8px 14px; white-space: nowrap; }
+.upload-bar .btn:disabled { opacity: .6; }

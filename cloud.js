@@ -3,18 +3,23 @@
 //   data/voters      { fields, rows (JSON string), count }
 //   wards/{ward}     { party: { voterId: partyId }, abroad: { voterId: 1 }, deceased: { voterId: 1 },
 //                     duplicate: { voterId: originalVoterId } }
+//   photos/meta      { chunks: [chunk ids], count }
+//   photos/{chunk}   { p: { voterId: base64 JPEG thumbnail } }   (about 120 voters per chunk)
 // Access is limited to approved Google accounts by Firestore security rules.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, getDoc, setDoc, collection, onSnapshot, writeBatch, deleteField,
+  doc, getDoc, getDocFromCache, getDocFromServer, setDoc, collection, onSnapshot, writeBatch, deleteField,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+// The cache keeps the voter list and photos on the device, so photos download only once.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager(), cacheSizeBytes: 150 * 1024 * 1024 }),
+});
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -150,8 +155,58 @@ function start(fields, rows) {
     if (!ui) {
       ungate();
       ui = window.startApp({ fields, rows, assign, abroad, deceased, duplicate, onSave });
+      loadPhotos(ui).catch(e => console.warn("Photos not loaded:", e));
     } else {
       ui.applyRemote({ assign, abroad, deceased, duplicate });
     }
   }, e => gate(`<h2>Connection problem</h2><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Reload</button>`));
+}
+
+// ---------- Photos ----------
+// Each chunk is read from this device's cache when it has it, otherwise downloaded once.
+async function loadPhotos(ui) {
+  const meta = await getDocFromServer(doc(db, "photos", "meta")).catch(() => getDocFromCache(doc(db, "photos", "meta")));
+  if (!meta.exists()) return offerPhotoUpload();
+  const photos = {};
+  await Promise.all(meta.data().chunks.map(async id => {
+    const ref = doc(db, "photos", id);
+    const snap = await getDocFromCache(ref).catch(() => getDoc(ref));
+    Object.assign(photos, snap.data()?.p || {});
+  }));
+  ui.setPhotos(photos);
+}
+
+// One-time upload, offered only on the computer that has photos.json (it is never published).
+async function offerPhotoUpload() {
+  const res = await fetch("photos.json").catch(() => null);
+  if (!res || !res.ok) return;
+  const photos = await res.json();
+  const bar = document.createElement("div");
+  bar.className = "upload-bar";
+  bar.innerHTML = `<span>Voter photos found on this computer (${Object.keys(photos).length.toLocaleString("en-IN")}).</span>
+    <button class="btn" type="button">Upload photos</button>`;
+  document.body.appendChild(bar);
+  const btn = bar.querySelector("button");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      const ids = Object.keys(photos), chunks = [];
+      for (let i = 0; i < ids.length; i += 120) chunks.push(ids.slice(i, i + 120));
+      const names = chunks.map((_, i) => "c" + String(i).padStart(2, "0"));
+      // A batch is limited to about 10 MB, so photos go up a few chunks at a time.
+      for (let i = 0; i < chunks.length; i += 5) {
+        btn.textContent = `Uploading ${Math.min(i + 5, chunks.length)} / ${chunks.length}…`;
+        const batch = writeBatch(db);
+        chunks.slice(i, i + 5).forEach((c, k) => batch.set(doc(db, "photos", names[i + k]), { p: Object.fromEntries(c.map(id => [id, photos[id]])) }));
+        await batch.commit();
+      }
+      await setDoc(doc(db, "photos", "meta"), { chunks: names, count: ids.length });
+      bar.remove();
+      location.reload();
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "Retry upload";
+      alert("Photo upload failed: " + e.message);
+    }
+  });
 }

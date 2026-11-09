@@ -307,6 +307,12 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
       .map(k => BY_VID.get(k)).filter(Boolean).map(o => ref(o, "Also listed as")).join("");
   }
 
+  // Photos arrive after the list (see setPhotos); until then a voter shows the first letter of their name.
+  let photos = {};
+  const photoHTML = (v, cls) => photos[v.voter_id]
+    ? `<img class="${cls}" src="data:image/jpeg;base64,${photos[v.voter_id]}" alt="" loading="lazy">`
+    : `<span class="${cls} no-photo">${esc([...String(v.name)][0] || "")}</span>`;
+
   // A compact tile; tapping it opens the full details and the party buttons.
   function voterHTML(v) {
     const p = partyById(partyOf(v));
@@ -317,12 +323,12 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
         + (isAbroad(v) ? `<span class="tag abroad" title="Out of country">${svg(ICON.plane, 12)}</span>` : "");
     return `
       <div class="voter${isAbroad(v) ? " is-abroad" : ""}${isDeceased(v) ? " is-dead" : ""}${isDuplicate(v) ? " is-dup" : ""}" data-vid="${esc(v.voter_id)}" style="--party-color:${p ? p.color : "var(--border)"}">
-        <div class="serial" title="గ్రా.పం.ఓ.జా.వ.సం.">${v.serial}</div>
+        ${photoHTML(v, "v-photo")}
         <div class="v-main">
+          <div class="v-top"><span class="serial" title="గ్రా.పం.ఓ.జా.వ.సం.">${v.serial}</span><span class="v-tags">${tags}</span></div>
           <div class="v-name">${esc(v.name)}</div>
           <div class="v-meta"><span class="v-id">${esc(v.voter_id)}</span><span>${v.age} <span class="sex ${male ? "m" : "f"}">${male ? "M" : "F"}</span></span></div>
         </div>
-        <div class="v-tags">${tags}</div>
       </div>`;
   }
 
@@ -467,9 +473,14 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
       <button class="icon-btn close" type="button" data-close aria-label="Close">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
-      <h3 id="sheet-name">${esc(v.name)}</h3>
-      <span class="v-id">${esc(v.voter_id)}</span>
-      <div class="dup-slot">${dupHTML(v)}</div>
+      <div class="sheet-head">
+        ${photoHTML(v, "sheet-photo")}
+        <div>
+          <h3 id="sheet-name">${esc(v.name)}</h3>
+          <span class="v-id">${esc(v.voter_id)}</span>
+          <div class="dup-slot">${dupHTML(v)}</div>
+        </div>
+      </div>
       <dl>
         <dt>గ్రా.పం.ఓ.జా.వ.సం.</dt><dd>${v.serial}</dd>
         <dt>వార్డు (Ward)</dt><dd>${v.ward}</dd>
@@ -495,6 +506,11 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
   // Called by cloud.js when tags change on another device.
   let remoteTimer;
   return {
+    setPhotos(next) {
+      photos = next;
+      document.querySelectorAll(".voter").forEach(el => refresh(el.dataset.vid));
+      if (!$("#sheet").hidden) openSheet($("#sheet").dataset.vid);
+    },
     applyRemote(next) {
       for (const [cur, upd] of [[assign, next.assign], [abroad, next.abroad], [deceased, next.deceased], [duplicate, next.duplicate]]) {
         for (const k of Object.keys(cur)) if (!(k in upd)) delete cur[k];
