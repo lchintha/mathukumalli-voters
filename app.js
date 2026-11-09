@@ -110,22 +110,6 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     return c;
   }
 
-  function stackBar(counts) {
-    const segs = PARTIES
-      .filter(p => counts[p.id])
-      .map(p => `<span title="${p.name}: ${counts[p.id]}" style="flex-grow:${counts[p.id]};background:${p.color}"></span>`);
-    if (counts[UNASSIGNED]) segs.push(`<span title="Not assigned: ${counts[UNASSIGNED]}" style="flex-grow:${counts[UNASSIGNED]};background:var(--surface-2)"></span>`);
-    return segs.join("");
-  }
-
-  function leading(counts) {
-    let best = null;
-    PARTIES.forEach(p => {
-      if (p.id !== "neutral" && counts[p.id] && (!best || counts[p.id] > counts[best.id])) best = p;
-    });
-    return best;
-  }
-
   // ---------- Router ----------
   function parseHash() {
     const [route, qs] = location.hash.replace(/^#/, "").split("?");
@@ -151,8 +135,8 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
   }
 
   // ---------- Dashboard ----------
-  // Small totals on top, then a row per ward with each party's expected votes.
-  const COLS = [...PARTIES, { id: UNASSIGNED, name: "Not marked", color: "var(--unmarked)" }];
+  // Small totals on top, then a card per ward with each party's expected votes.
+  const COLS = [...PARTIES, { id: UNASSIGNED, name: "Unmarked", color: "var(--unmarked)" }];
 
   function renderDashboard() {
     const total = VOTERS.length;
@@ -161,52 +145,47 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     const n = test => VOTERS.filter(test).length;
 
     const stat = (icon, color, label, value, link) => `
-      <${link ? `a href="${link}"` : "div"} class="stat">
-        <span class="stat-icon" style="--c:${color}">${svg(ICON[icon], 18)}</span>
-        <div><div class="stat-value">${fmt(value)}</div><div class="stat-label">${label}</div></div>
-      </${link ? "a" : "div"}>`;
-    $("#stats").innerHTML =
-      stat("users", "var(--brand-2)", "Total voters", total) +
+      <a href="${link}" class="stat" style="--c:${color}">
+        <span class="stat-label">${label}</span>
+        <span class="stat-icon">${svg(ICON[icon], 16)}</span>
+        <span class="stat-value">${fmt(value)}</span>
+      </a>`;
+    const marked = living - counts[UNASSIGNED];
+    $("#stats").innerHTML = `
+      <a href="#voters" class="stat hero">
+        <span class="stat-label">Total voters</span>
+        <span class="stat-icon">${svg(ICON.users, 16)}</span>
+        <span class="stat-value">${fmt(total)}</span>
+        <span class="stat-chip">${Math.round(pct(marked, living))}% marked</span>
+      </a>` +
       stat("male", "var(--male)", "Male", n(v => v.gender === MALE), "#voters?gender=" + encodeURIComponent(MALE)) +
       stat("female", "var(--female)", "Female", n(v => v.gender === FEMALE), "#voters?gender=" + encodeURIComponent(FEMALE)) +
       stat("plane", "var(--abroad)", "Out of country", n(isAbroad), "#voters?status=abroad") +
       stat("deceased", "var(--deceased)", "Deceased", n(isDeceased), "#voters?status=deceased") +
       stat("copy", "var(--duplicate)", "Duplicates", n(isDuplicate), "#voters?status=duplicate");
-    $("#tag-progress").textContent = `${fmt(living - counts[UNASSIGNED])} / ${fmt(living)} marked`;
+    $("#tag-progress").textContent = `${fmt(marked)} of ${fmt(living)} voters marked with a party`;
 
-    $("#ward-title").innerHTML = `${svg(ICON.vote)} Votes by ward`;
-    const head = `
-      <div class="wt-row wt-head">
-        <span>Ward</span><span>Voters</span>
-        ${COLS.map(p => `<span class="num"><i style="--c:${p.color}"></i>${p.name}</span>`).join("")}
-        <span style="justify-self:end">Leading</span>
-      </div>`;
-    $("#wards").innerHTML = head
-      + wardRow(null, VOTERS)
-      + WARDS.map(w => wardRow(w, VOTERS.filter(v => v.ward === w))).join("");
+    $("#wards").innerHTML = wardCard(null, VOTERS) + WARDS.map(w => wardCard(w, VOTERS.filter(v => v.ward === w))).join("");
   }
 
-  function wardRow(ward, list) {
+  function wardCard(ward, list) {
     const c = countParties(list);
-    const counted = list.filter(v => !isOut(v)).length;
     const link = extra => "#voters?" + new URLSearchParams({ ...(ward ? { ward } : {}), ...extra });
-    const marks = [[isAbroad, "plane", "ic-abroad", "Out of country"], [isDeceased, "deceased", "ic-dead", "Deceased"], [isDuplicate, "copy", "ic-dup", "Duplicates"]]
-      .map(([test, icon, cls, title]) => { const k = list.filter(test).length; return k ? `<span class="${cls}" title="${title}">${svg(ICON[icon], 11)}${k}</span>` : ""; })
+    const flags = [[isAbroad, "plane", "ic-abroad", "Out of country", "abroad"], [isDeceased, "deceased", "ic-dead", "Deceased", "deceased"], [isDuplicate, "copy", "ic-dup", "Duplicates", "duplicate"]]
+      .map(([test, icon, cls, title, status]) => { const k = list.filter(test).length; return k ? `<a class="flag ${cls}" href="${link({ status })}" title="${title}">${svg(ICON[icon], 13)}${k}</a>` : ""; })
       .join("");
-    const lead = leading(c);
-    const second = lead ? Math.max(0, ...PARTIES.filter(p => p.id !== "neutral" && p.id !== lead.id).map(p => c[p.id])) : 0;
     return `
-      <div class="wt-row${ward ? "" : " wt-total"}" data-href="${link({})}">
-        <a class="wt-ward" href="${link({})}"><span class="ward-no">${ward ?? "All"}</span><span class="wt-name">${ward ? `Ward ${ward}` : "All wards"}</span></a>
-        <a class="wt-voters" href="${link({})}"><b>${fmt(list.length)}</b>${marks ? `<small>${marks}</small>` : ""}</a>
-        ${COLS.map(p => `
-          <a class="wt-cell${c[p.id] ? "" : " zero"}" href="${link({ party: p.id })}" data-label="${p.id === UNASSIGNED ? "Unmarked" : p.name}" style="--c:${p.color}">
-            <b>${fmt(c[p.id])}</b><small>${pct(c[p.id], counted)}%</small>
-          </a>`).join("")}
-        <span class="wt-lead">${lead
-          ? `<span class="lead-badge" style="background:${lead.color};color:${onColor(lead.color)}">${lead.name}</span>${c[lead.id] > second ? `<small>+${fmt(c[lead.id] - second)}</small>` : ""}`
-          : `<small>—</small>`}</span>
-        <div class="stackbar wt-bar">${stackBar(c)}</div>
+      <div class="ward-card${ward ? "" : " all"}" data-href="${link({})}">
+        <div class="wc-head">
+          <a class="ward-no" href="${link({})}">${ward ?? "All"}</a>
+          <a class="wc-title" href="${link({})}">${ward ? `Ward ${ward}` : "All wards"}</a>
+          <span class="wc-total">${fmt(list.length)} voters</span>
+        </div>
+        <div class="wc-counts">${COLS.map(p => `
+          <a class="wc-cell${c[p.id] ? "" : " zero"}" href="${link({ party: p.id })}" style="--c:${p.color}">
+            <small>${p.name}</small><b>${fmt(c[p.id])}</b>
+          </a>`).join("")}</div>
+        ${flags ? `<div class="wc-flags">${flags}</div>` : ""}
       </div>`;
   }
 
@@ -386,14 +365,36 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
       onSave(vid, { deceased: null });
     } else {
       const p = partyById(assign[vid]);
-      if (p && !confirm(`Mark ${v.name} as deceased? Their ${p.name} mark will be removed.`)) return;
+      if (p && !ask.confirmed) {
+        return showAsk(`
+          <p>Mark <b>${esc(v.name)}</b> as deceased? Their <b>${p.name}</b> mark will be removed.</p>
+          <div class="ask-actions">
+            <button type="button" class="btn ghost" data-ask-cancel>Cancel</button>
+            <button type="button" class="btn" data-ask-dead="${esc(vid)}">Mark deceased</button>
+          </div>`);
+      }
       deceased[vid] = 1;
       delete assign[vid];
       delete abroad[vid];
       onSave(vid, { deceased: 1, party: null, abroad: null });
     }
+    hideAsk();
     refresh(vid);
     toast(deceased[vid] ? `${v.name}: marked deceased` : `${v.name}: deceased mark removed`);
+  }
+
+  // Questions are asked inside the sheet: browsers can silently block prompt() and confirm().
+  const ask = { confirmed: false };
+  function showAsk(html) {
+    const box = $("#sheet .sheet-ask");
+    box.innerHTML = html;
+    box.hidden = false;
+    box.scrollIntoView({ block: "nearest" });
+    box.querySelector("input")?.focus();
+  }
+  function hideAsk() {
+    const box = $("#sheet .sheet-ask");
+    if (box) { box.hidden = true; box.innerHTML = ""; }
   }
 
   // Finds a voter by గ్రా.పం.ఓ.జా.వ.సం. or Voter ID.
@@ -413,15 +414,38 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
       refreshDupLinks(vid);
       return toast(`${v.name}: duplicate mark removed`);
     }
-    const input = prompt(`${v.name} (${v.serial}) is a duplicate of which voter?\nEnter their గ్రా.పం.ఓ.జా.వ.సం. or Voter ID.`);
-    if (input == null) return;
-    let o = findVoter(input);
+    showAsk(`
+      <label class="ask-label" for="dup-input">${esc(v.name)} (${v.serial}) is a duplicate of which voter?</label>
+      <input id="dup-input" class="ask-input" type="search" autocomplete="off" autocapitalize="characters" spellcheck="false"
+             placeholder="వ.సం. or Voter ID" data-dup-for="${esc(vid)}">
+      <div class="dup-match"></div>
+      <div class="ask-actions">
+        <button type="button" class="btn ghost" data-ask-cancel>Cancel</button>
+        <button type="button" class="btn" data-dup-save="${esc(vid)}" disabled>Mark duplicate</button>
+      </div>`);
+  }
+
+  // The voter that the typed serial or ID points at, following duplicates back to the original.
+  function dupTarget(vid, text) {
+    let o = findVoter(text);
     while (o && duplicate[o.voter_id]) o = BY_VID.get(duplicate[o.voter_id]);
-    if (!o) return alert(`No voter found for “${input.trim()}”.`);
-    if (o === v) return alert("A voter can't be a duplicate of themselves.");
-    const p = partyById(assign[vid]);
-    if (!confirm(`Mark ${v.name} (${v.serial} · ${v.voter_id}) as a duplicate of ${o.name} (${o.serial} · ${o.voter_id})?`
-      + (p ? `\n\nTheir ${p.name} mark will be removed.` : ""))) return;
+    return o && o.voter_id !== vid ? o : null;
+  }
+  function showDupMatch(input) {
+    const vid = input.dataset.dupFor, text = input.value.trim();
+    const o = dupTarget(vid, text);
+    const box = $("#sheet .dup-match");
+    box.innerHTML = !text ? ""
+      : o ? `<div class="dup-pick">${photoHTML(o, "v-photo")}<div><b>${esc(o.name)}</b><span class="muted small">${o.serial} · Ward ${o.ward} · ${esc(o.voter_id)}</span></div></div>`
+        + (partyById(assign[vid]) ? `<p class="muted small">Their ${partyById(assign[vid]).name} mark will be removed.</p>` : "")
+      : findVoter(text) ? `<p class="ask-error">That is this same voter.</p>`
+      : `<p class="ask-error">No voter found for “${esc(text)}”.</p>`;
+    $("#sheet [data-dup-save]").disabled = !o;
+  }
+
+  function markDuplicate(vid, text) {
+    const v = BY_VID.get(vid), o = dupTarget(vid, text);
+    if (!o) return;
     // Anything that pointed at this voter now points at the original.
     for (const k of Object.keys(duplicate)) if (duplicate[k] === vid) { duplicate[k] = o.voter_id; onSave(k, { duplicate: o.voter_id }); }
     duplicate[vid] = o.voter_id;
@@ -429,6 +453,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     delete abroad[vid];
     delete deceased[vid];
     onSave(vid, { duplicate: o.voter_id, party: null, abroad: null, deceased: null });
+    hideAsk();
     refreshDupLinks(vid, o.voter_id);
     toast(`${v.name}: duplicate of ${o.serial}`);
   }
@@ -451,8 +476,8 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     const tile = e.target.closest(".voter");
     if (tile) return openSheet(tile.dataset.vid);
     if (e.target.closest("#view-dashboard a")) return resetFilters();
-    // Anywhere else on a ward row opens that ward's voters; the party boxes keep their own links.
-    const row = e.target.closest(".wt-row[data-href]");
+    // Anywhere else on a ward card opens that ward's voters; the party bars keep their own links.
+    const row = e.target.closest(".ward-card[data-href]");
     if (row) { resetFilters(); location.hash = row.dataset.href; }
   });
 
@@ -499,13 +524,25 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
         </div>
       </div>
       <div class="pick-label">Expected party</div>
-      <div class="pick">${pickerHTML(v)}</div>`;
+      <div class="pick">${pickerHTML(v)}</div>
+      <div class="sheet-ask" hidden></div>`;
     s.hidden = false;
     $("#sheet-backdrop").hidden = false;
   }
   function closeSheet() { $("#sheet").hidden = true; $("#sheet-backdrop").hidden = true; }
   $("#sheet-backdrop").addEventListener("click", closeSheet);
-  $("#sheet").addEventListener("click", e => { if (e.target.closest("[data-close]")) closeSheet(); });
+  $("#sheet").addEventListener("click", e => {
+    if (e.target.closest("[data-close]")) return closeSheet();
+    if (e.target.closest("[data-ask-cancel]")) return hideAsk();
+    const dead = e.target.closest("[data-ask-dead]");
+    if (dead) { ask.confirmed = true; toggleDeceased(dead.dataset.askDead); ask.confirmed = false; return; }
+    const save = e.target.closest("[data-dup-save]");
+    if (save) return markDuplicate(save.dataset.dupSave, $("#dup-input").value);
+  });
+  $("#sheet").addEventListener("input", e => { if (e.target.id === "dup-input") showDupMatch(e.target); });
+  $("#sheet").addEventListener("keydown", e => {
+    if (e.target.id === "dup-input" && e.key === "Enter") markDuplicate(e.target.dataset.dupFor, e.target.value);
+  });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
 
   // ---------- Init ----------
@@ -518,7 +555,9 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     setPhotos(next) {
       photos = next;
       document.querySelectorAll(".voter").forEach(el => refresh(el.dataset.vid));
-      if (!$("#sheet").hidden) openSheet($("#sheet").dataset.vid);
+      // Swap only the photo, so a half-filled question in the sheet is kept.
+      const img = $("#sheet .sheet-photo"), v = BY_VID.get($("#sheet").dataset.vid);
+      if (img && v) img.outerHTML = photoHTML(v, "sheet-photo");
     },
     applyRemote(next) {
       for (const [cur, upd] of [[assign, next.assign], [abroad, next.abroad], [deceased, next.deceased], [duplicate, next.duplicate]]) {

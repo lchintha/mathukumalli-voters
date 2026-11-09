@@ -42,25 +42,25 @@
   <main id="app" hidden>
     <!-- DASHBOARD -->
     <section id="view-dashboard" class="view" hidden>
-      <div class="page-head">
+      <div class="dash-head">
         <h1>Dashboard</h1>
-        <span class="chip-muted" id="tag-progress"></span>
+        <p class="muted" id="tag-progress"></p>
       </div>
 
-      <div class="card stats" id="stats"></div>
+      <div class="stats" id="stats"></div>
 
-      <article class="card">
+      <article class="card wards-card">
         <div class="card-head">
-          <h2 class="with-icon" id="ward-title"></h2>
-          <span class="muted small">Tap a number to see those voters</span>
+          <h2>Votes by ward</h2>
+          <span class="muted small">Tap a ward or a number to see those voters</span>
         </div>
-        <div class="wt" id="wards"></div>
+        <div class="ward-grid" id="wards"></div>
       </article>
     </section>
 
     <!-- VOTERS -->
     <section id="view-voters" class="view" hidden>
-      <div class="page-head">
+      <div class="dash-head">
         <h1>Voters</h1>
         <p class="muted" id="result-count"></p>
       </div>
