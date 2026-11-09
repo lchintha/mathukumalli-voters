@@ -196,7 +196,7 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     const lead = leading(c);
     const second = lead ? Math.max(0, ...PARTIES.filter(p => p.id !== "neutral" && p.id !== lead.id).map(p => c[p.id])) : 0;
     return `
-      <div class="wt-row${ward ? "" : " wt-total"}">
+      <div class="wt-row${ward ? "" : " wt-total"}" data-href="${link({})}">
         <a class="wt-ward" href="${link({})}"><span class="ward-no">${ward ?? "All"}</span><span class="wt-name">${ward ? `Ward ${ward}` : "All wards"}</span></a>
         <a class="wt-voters" href="${link({})}"><b>${fmt(list.length)}</b>${marks ? `<small>${marks}</small>` : ""}</a>
         ${COLS.map(p => `
@@ -450,7 +450,10 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     if (open) return openSheet(open.dataset.open);
     const tile = e.target.closest(".voter");
     if (tile) return openSheet(tile.dataset.vid);
-    if (e.target.closest("#view-dashboard a")) resetFilters();
+    if (e.target.closest("#view-dashboard a")) return resetFilters();
+    // Anywhere else on a ward row opens that ward's voters; the party boxes keep their own links.
+    const row = e.target.closest(".wt-row[data-href]");
+    if (row) { resetFilters(); location.hash = row.dataset.href; }
   });
 
   let qTimer;

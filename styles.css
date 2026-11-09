@@ -115,6 +115,9 @@ a.stat:hover { background: var(--surface-2); }
   padding: 8px 6px 10px; border-bottom: 1px solid var(--border);
 }
 .wt-row:last-child { border-bottom: 0; }
+.wt-row[data-href] { cursor: pointer; }
+.wt-row[data-href]:hover { background: color-mix(in srgb, var(--accent) 50%, transparent); }
+.wt-total[data-href]:hover { background: var(--accent); }
 .wt-head {
   font-size: 12px; font-weight: 600; color: var(--muted); padding-top: 0;
   position: sticky; top: 56px; background: var(--surface); z-index: 2;
