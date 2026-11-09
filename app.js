@@ -314,19 +314,25 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
     : `<span class="${cls} no-photo">${esc([...String(v.name)][0] || "")}</span>`;
 
   // A compact tile; tapping it opens the full details and the party buttons.
-  function voterHTML(v) {
+  // Party or status label shown under the name on the tile.
+  function tagsHTML(v) {
     const p = partyById(partyOf(v));
-    const male = v.gender === MALE;
-    const tags = isDeceased(v) ? `<span class="tag dead">Deceased</span>`
+    return isDeceased(v) ? `<span class="tag dead">Deceased</span>`
       : isDuplicate(v) ? `<span class="tag dup">Duplicate</span>`
       : (p ? `<span class="tag" style="background:${p.color};color:${onColor(p.color)}">${p.name}</span>` : `<span class="tag none">Not marked</span>`)
         + (isAbroad(v) ? `<span class="tag abroad" title="Out of country">${svg(ICON.plane, 12)}</span>` : "");
+  }
+
+  function voterHTML(v) {
+    const p = partyById(partyOf(v));
+    const male = v.gender === MALE;
     return `
       <div class="voter${isAbroad(v) ? " is-abroad" : ""}${isDeceased(v) ? " is-dead" : ""}${isDuplicate(v) ? " is-dup" : ""}" data-vid="${esc(v.voter_id)}" style="--party-color:${p ? p.color : "var(--border)"}">
         ${photoHTML(v, "v-photo")}
         <div class="v-main">
-          <div class="v-top"><span class="serial" title="గ్రా.పం.ఓ.జా.వ.సం.">${v.serial}</span><span class="v-tags">${tags}</span></div>
+          <div class="serial" title="గ్రా.పం.ఓ.జా.వ.సం.">${v.serial}</div>
           <div class="v-name">${esc(v.name)}</div>
+          <div class="v-tags">${tagsHTML(v)}</div>
           <div class="v-meta"><span class="v-id">${esc(v.voter_id)}</span><span>${v.age} <span class="sex ${male ? "m" : "f"}">${male ? "M" : "F"}</span></span></div>
         </div>
       </div>`;
@@ -479,16 +485,16 @@ window.startApp = ({ fields, rows, assign, abroad, deceased, duplicate, onSave }
           <h3 id="sheet-name">${esc(v.name)}</h3>
           <span class="v-id">${esc(v.voter_id)}</span>
           <div class="dup-slot">${dupHTML(v)}</div>
+          <dl>
+            <dt>గ్రా.పం.ఓ.జా.వ.సం.</dt><dd>${v.serial}</dd>
+            <dt>వార్డు (Ward)</dt><dd>${v.ward}</dd>
+            <dt>${esc(v.relation_type || "Relation")}</dt><dd>${esc(v.relation_name || "—")}</dd>
+            <dt>వయస్సు / లింగము</dt><dd>${v.age} · ${v.gender === MALE ? "Male (పు)" : "Female (స్త్రీ)"}</dd>
+            <dt>ఇంటి సంఖ్య</dt><dd>${esc(v.house_no)}</dd>
+            <dt>అ.ఓ.జా.వ.సం.</dt><dd>${esc(v.ac_serial)}</dd>
+          </dl>
         </div>
       </div>
-      <dl>
-        <dt>గ్రా.పం.ఓ.జా.వ.సం.</dt><dd>${v.serial}</dd>
-        <dt>వార్డు (Ward)</dt><dd>${v.ward}</dd>
-        <dt>${esc(v.relation_type || "Relation")}</dt><dd>${esc(v.relation_name || "—")}</dd>
-        <dt>వయస్సు / లింగము</dt><dd>${v.age} · ${v.gender === MALE ? "Male (పు)" : "Female (స్త్రీ)"}</dd>
-        <dt>ఇంటి సంఖ్య</dt><dd>${esc(v.house_no)}</dd>
-        <dt>అ.ఓ.జా.వ.సం.</dt><dd>${esc(v.ac_serial)}</dd>
-      </dl>
       <div class="pick-label">Expected party</div>
       <div class="pick">${pickerHTML(v)}</div>`;
     s.hidden = false;
